@@ -1,5 +1,0 @@
-[
-  "tests/test_helloworld.py::test_parse", 
-  "tests/test_senior.py::test_parse", 
-  "tests/test_stemcobol.py::test_parse"
-]

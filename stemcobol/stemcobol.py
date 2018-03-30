@@ -39,15 +39,22 @@ cmtentry_patterns = (_re_remarks, _re_security, _re_date_compiled,
 
 FIXED_FORMAT, FREE_FORMAT, VARIABLE_FORMAT = range(3)
 
-def parse(path, fmt, std):
+def parse(src, fmt, std):
+
+    def _split(_src):
+        _lines = []
+        s = 0
+        for e in range(len(_src)):
+            if _src[e] == '\n':
+                _lines.append(_src[s:e+1])
+                s = e + 1
+        return _lines
 
     ###############################
     ######### preprocess ##########
     ###############################
 
-    # read source file
-    with open(path) as f:
-        lines = f.readlines()
+    lines = _split(src)
     linemap = dict((n, n) for n in range(len(lines)))
 
     # handle comments

@@ -21,8 +21,10 @@ def srcfile():
 
 def test_parse():
 
-    tree = parse(os.path.join(srcdir, source), FREE_FORMAT, '')
-    node = tree
-    while len(node.subnodes) > 0:
-        node = node.subnodes[-1]
-    assert node.start.text == "STOP" and node.stop.text == "RUN"
+    # read source file
+    with open(os.path.join(srcdir, source)) as f:
+        tree = parse(f.read(), FREE_FORMAT, '')
+        node = tree
+        while len(node.subnodes) > 0:
+            node = node.subnodes[-1]
+        assert node.start.text == "STOP" and node.stop.text == "RUN"

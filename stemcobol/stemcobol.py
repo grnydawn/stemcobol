@@ -55,15 +55,14 @@ def parse(src, fmt, std):
     ###############################
 
     lines = _split(src)
-    linemap = dict((n, n) for n in range(len(lines)))
 
     # handle comments
-    linemap, lines = handle_comments(lines, linemap, fmt, std)
+    cmt_linemap, lines = handle_comments(lines, fmt, std)
 
     #...
 
     # update linemap to start from 1
-    linemap = dict((k+1, v+1) for k, v in linemap.items())
+    #linemap = dict((k+1, v+1) for k, v in linemap.items())
 
     ###############################
     #########    parse   ##########
@@ -79,7 +78,9 @@ def parse(src, fmt, std):
     walker.walk(listner, tree)
     return root
 
-def handle_comments(_lines, _linemap, fmt, std):
+def handle_comments(_lines, fmt, std):
+
+    linemap = {}
 
     def _handle_cmtentry(_line):
         for pattern in cmtentry_patterns:
@@ -99,6 +100,9 @@ def handle_comments(_lines, _linemap, fmt, std):
                     line = '*> '+line
                 else:
                     line = _handle_cmtentry(line[7:])
+                linemap[lineno] = line[:7]
+            else:
+                linemap[lineno] = line
         elif fmt == FREE_FORMAT:
             lstrip = line.lstrip()
             if len(lstrip)>0 and lstrip[0] in ('*', '$', 'D', 'd', '/'):
@@ -106,9 +110,10 @@ def handle_comments(_lines, _linemap, fmt, std):
                     line = '*> '+line
             else:
                 line = _handle_cmtentry(line)
+            linemap[lineno] = None
         elif fmt == VARIABLE_FORMAT:
             raise NotImplemented('VARIABLE format is not supported yet.')
 
         lines.append(line)
 
-    return _linemap, lines
+    return linemap, lines

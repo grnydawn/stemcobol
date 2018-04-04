@@ -6,9 +6,11 @@ from builtins import *
 """Main module."""
 
 import re
-from collections import OrderedDict
+from collections import OrderedDict, MutableMapping
+from io import StringIO
 
-from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
+from antlr4 import (InputStream, CommonTokenStream, ParseTreeWalker,
+    BufferedTokenStream, ParserRuleContext, TerminalNode)
 
 from .parser.Cobol85Lexer import Cobol85Lexer
 from .parser.Cobol85Listener import Cobol85Listener
@@ -31,13 +33,22 @@ _re_date_compiled = re.compile(r'\s*date-compiled\s*\.?(?P<cmtentry>\s+[^\s]*)',
 _re_date_written = re.compile(r'\s*date-written\s*\.?(?P<cmtentry>\s+[^\s]*)', re.I)
 _re_installation = re.compile(r'\s*installation\s*\.?(?P<cmtentry>\s+[^\s]*)', re.I)
 _re_author = re.compile(r'\s*author\s*\.?(?P<cmtentry>\s+[^\s]*)', re.I)
-_re_program_id = re.compile(r'\s*program-id\s*\.?\s+[_a-z][0-9_a-z]*((\s+is)?\s+(common|initial|library|definition|recursive)(\s+program)?)?\s*\.?(?P<cmtentry>.*)', re.I)
+_re_program_id = re.compile(r'\s*program-id\s*\.?\s+[_a-z][0-9_a-z\-]*((\s+is)?\s+(common|initial|library|definition|recursive)(\s+program)?)?\s*\.?(?P<cmtentry>.*)', re.I)
 
 cmtentry_patterns = (_re_remarks, _re_security, _re_date_compiled,
     _re_date_written, _re_installation, _re_author, _re_program_id
 )
 
 FIXED_FORMAT, FREE_FORMAT, VARIABLE_FORMAT = range(3)
+
+
+def tocobol_proxy(obj):
+
+    if hasattr(obj, 'text'):
+        return obj.text
+    else:
+        return ''.join([c.tocobol() for c in obj.subnodes])
+
 
 def parse(src, fmt, std):
 
@@ -72,10 +83,11 @@ def parse(src, fmt, std):
     stream = CommonTokenStream(lexer)
     parser = Cobol85Parser(stream)
     tree = parser.startRule()
-    root = Node(attr_factory=OrderedDict)
-    listner = Cobol85Listener(root)
+    root = Node(attrs=OrderedDict(), shared_methods={'tocobol': tocobol_proxy})
+    listner = Cobol85Listener(root, stream)
     walker = ParseTreeWalker()
     walker.walk(listner, tree)
+
     return root
 
 def handle_comments(_lines, fmt, std):
@@ -94,26 +106,29 @@ def handle_comments(_lines, fmt, std):
 
     lines = []
     for lineno, line in enumerate(_lines):
+        ind = -1
         if fmt == FIXED_FORMAT:
             if len(line) >= 7:
-                if line[6] in ('*', '$', 'D', 'd', '/'):
-                    line = '*> '+line
-                else:
-                    line = _handle_cmtentry(line[7:])
-                linemap[lineno] = line[:7]
-            else:
-                linemap[lineno] = line
+                ind = 6
         elif fmt == FREE_FORMAT:
-            lstrip = line.lstrip()
-            if len(lstrip)>0 and lstrip[0] in ('*', '$', 'D', 'd', '/'):
-                if not lstrip.startswith('*>'):
-                    line = '*> '+line
-            else:
-                line = _handle_cmtentry(line)
-            linemap[lineno] = None
+            if len(line) >= 1:
+                ind = 0
         elif fmt == VARIABLE_FORMAT:
             raise NotImplemented('VARIABLE format is not supported yet.')
+
+        if ind >= 0:
+            if line[ind] == '*':
+                if not line[ind:].startswith('*>'):
+                    line = '*> '+line[ind+1:]
+            elif line[ind] in ('$', 'D', 'd', '/'):
+                line = '*> '+line[ind:]
+            else:
+                line = _handle_cmtentry(line[ind+1:])
+            linemap[lineno] = line[:ind]
+        else:
+            linemap[lineno] = None
 
         lines.append(line)
 
     return linemap, lines
+

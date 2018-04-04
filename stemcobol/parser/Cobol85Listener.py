@@ -1,38 +1,76 @@
 # Generated from Cobol85.g4 by ANTLR 4.7.1
 from antlr4 import *
 
+import re
 import copy
+import logging
 from functools import partial
+import stemtree
+
+_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
+_re_kcobol_end = re.compile(r'/\s*kcobol\s*>', re.I)
+
+# NOTE: kernel can be placed on the levels of statement, sentence, paragraph, or section.
+#       However, the begin and end of kernel should match the same level each other. 
 
 # This class defines a complete listener for a parse tree produced by Cobol85Parser.
 class Cobol85Listener(ParseTreeListener):
 
-    def __init__(self, root):
+    def __init__(self, root, stream):
         self.root = root
-        self.stack = [root]
+        self.stream = stream
+        self._stack = [root]
+
+        for i in range(len(self.stream.tokens)):
+            token = self.stream.tokens[i]
+            if token.channel != token.HIDDEN_CHANNEL:
+                break
+            cnode = self.root.__class__()
+            cnode.name = 'hidden'
+            cnode.text = token.text
+            cnode.uppernode = root
+            root.add_subnode(cnode)
+
+    def visitTerminal(self, node:TerminalNode):
+
+        uppernode = self._stack[-1]
+
+        tnode = self.root.__class__()
+        tnode.name = 'terminal'
+        tnode.text = node.symbol.text
+        tnode.uppernode = uppernode
+        uppernode.add_subnode(tnode)
+
+        for i in range(node.symbol.tokenIndex+1, len(self.stream.tokens)):
+            token = self.stream.tokens[i]
+            if token.channel != token.HIDDEN_CHANNEL:
+                break
+            cnode = self.root.__class__()
+            cnode.name = 'hidden'
+            cnode.text = token.text
+            cnode.uppernode = uppernode
+            uppernode.add_subnode(cnode)
 
     def pop_stack(self, name, ctx):
-        self.stack.pop()
 
-    def add_node(self, name, uppernode, ctx):
+        self._stack.pop()
 
-        node = self.root.local_deepcopy()
+    def add_node(self, name, ctx):
 
-        node.name = name
+        uppernode = self._stack[-1]
+
+        node = self.root.__class__()
+        node.name = name[5:]
         node.uppernode = uppernode
-        node.depth = ctx.depth()
-        node.start = ctx.start
-        node.stop = ctx.stop
-
         uppernode.add_subnode(node)
 
-        self.stack.append(node)
+        self._stack.append(node)
 
     def __getattr__(self, name):
         if name.startswith('enter'):
-            return partial(self.add_node, name[5:], self.stack[-1])
+            return partial(self.add_node, name)
         elif name.startswith('exit'):
-            return partial(self.pop_stack, name[4:])
+            return partial(self.pop_stack, name)
         else:
             import pdb; pdb.set_trace()
 
@@ -2447,14 +2485,15 @@ class Cobol85Listener(ParseTreeListener):
 #    def exitSentence(self, ctx):
 #        pass
 #
-#
 #    # Enter a parse tree produced by Cobol85Parser#statement.
 #    def enterStatement(self, ctx):
 #        pass
+#        return self.add_node('enterStatement', ctx)
 #
 #    # Exit a parse tree produced by Cobol85Parser#statement.
 #    def exitStatement(self, ctx):
 #        pass
+#        return self.pop_stack('exitStatement', ctx)
 #
 #
 #    # Enter a parse tree produced by Cobol85Parser#acceptStatement.
@@ -5325,6 +5364,7 @@ class Cobol85Listener(ParseTreeListener):
 #
 #    # Exit a parse tree produced by Cobol85Parser#literal.
 #    def exitLiteral(self, ctx):
+#        import pdb; pdb.set_trace()
 #        pass
 #
 #

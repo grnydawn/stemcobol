@@ -27,4 +27,5 @@ def test_parse():
         node = tree
         while len(node.subnodes) > 0:
             node = node.subnodes[-1]
-        assert node.start.text == "PRINT-LINE"
+        assert node.text == "<EOF>"
+        import pdb; pdb.set_trace()

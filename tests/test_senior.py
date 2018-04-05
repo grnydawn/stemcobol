@@ -28,4 +28,3 @@ def test_parse():
         while len(node.subnodes) > 0:
             node = node.subnodes[-1]
         assert node.text == "<EOF>"
-        import pdb; pdb.set_trace()

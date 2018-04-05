@@ -1,14 +1,10 @@
 # Generated from Cobol85.g4 by ANTLR 4.7.1
 from antlr4 import *
 
-import re
 import copy
 import logging
 from functools import partial
 import stemtree
-
-_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
-_re_kcobol_end = re.compile(r'/\s*kcobol\s*>', re.I)
 
 # NOTE: kernel can be placed on the levels of statement, sentence, paragraph, or section.
 #       However, the begin and end of kernel should match the same level each other. 
@@ -29,9 +25,11 @@ class Cobol85Listener(ParseTreeListener):
             cnode.name = 'hidden'
             cnode.text = token.text
             cnode.uppernode = root
+            cnode.root = root
             root.add_subnode(cnode)
 
-    def visitTerminal(self, node:TerminalNode):
+    #def visitTerminal(self, node:TerminalNode):
+    def visitTerminal(self, node):
 
         uppernode = self._stack[-1]
 
@@ -39,6 +37,7 @@ class Cobol85Listener(ParseTreeListener):
         tnode.name = 'terminal'
         tnode.text = node.symbol.text
         tnode.uppernode = uppernode
+        tnode.root = self.root
         uppernode.add_subnode(tnode)
 
         for i in range(node.symbol.tokenIndex+1, len(self.stream.tokens)):
@@ -49,6 +48,7 @@ class Cobol85Listener(ParseTreeListener):
             cnode.name = 'hidden'
             cnode.text = token.text
             cnode.uppernode = uppernode
+            cnode.root = self.root
             uppernode.add_subnode(cnode)
 
     def pop_stack(self, name, ctx):
@@ -62,6 +62,7 @@ class Cobol85Listener(ParseTreeListener):
         node = self.root.__class__()
         node.name = name[5:]
         node.uppernode = uppernode
+        node.root = self.root
         uppernode.add_subnode(node)
 
         self._stack.append(node)

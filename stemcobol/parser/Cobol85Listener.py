@@ -24,6 +24,7 @@ class Cobol85Listener(ParseTreeListener):
             cnode = self.root.__class__()
             cnode.name = 'hidden'
             cnode.text = token.text
+            cnode.token = token.type
             cnode.uppernode = root
             cnode.root = root
             root.add_subnode(cnode)
@@ -36,6 +37,7 @@ class Cobol85Listener(ParseTreeListener):
         tnode = self.root.__class__()
         tnode.name = 'terminal'
         tnode.text = node.symbol.text
+        tnode.token = node.symbol.type
         tnode.uppernode = uppernode
         tnode.root = self.root
         uppernode.add_subnode(tnode)
@@ -47,6 +49,7 @@ class Cobol85Listener(ParseTreeListener):
             cnode = self.root.__class__()
             cnode.name = 'hidden'
             cnode.text = token.text
+            cnode.token = token.type
             cnode.uppernode = uppernode
             cnode.root = self.root
             uppernode.add_subnode(cnode)

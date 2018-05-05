@@ -15,24 +15,19 @@ class Cobol85Listener(ParseTreeListener):
     def __init__(self, root, stream):
         self.root = root
         self.stream = stream
-        self._stack = [root]
-
-        for i in range(len(self.stream.tokens)):
-            token = self.stream.tokens[i]
-            if token.channel != token.HIDDEN_CHANNEL:
-                break
-            cnode = self.root.__class__()
-            cnode.name = 'hidden'
-            cnode.text = token.text
-            cnode.token = token.type
-            cnode.uppernode = root
-            cnode.root = root
-            root.add_subnode(cnode)
+        lex = stream.tokenSource
+        tokenmap = dict((t,getattr(lex, t)) for t in dir(lex) if t.isupper())
+        root.setattr_shared('tokenmap', tokenmap)
+        rtokenmap =  dict((v,k) for k,v in tokenmap.items())
+        root.setattr_shared('rtokenmap', rtokenmap)
+        self._uppernode_stack = [root]
+        self._program_stack = [None]
+        self.rununit_node = None
 
     #def visitTerminal(self, node:TerminalNode):
     def visitTerminal(self, node):
 
-        uppernode = self._stack[-1]
+        uppernode = self._uppernode_stack[-1]
 
         tnode = self.root.__class__()
         tnode.name = 'terminal'
@@ -40,6 +35,8 @@ class Cobol85Listener(ParseTreeListener):
         tnode.token = node.symbol.type
         tnode.uppernode = uppernode
         tnode.root = self.root
+        tnode.program_node = self._program_stack[-1]
+        tnode.rununit_node = self.rununit_node
         uppernode.add_subnode(tnode)
 
         for i in range(node.symbol.tokenIndex+1, len(self.stream.tokens)):
@@ -52,58 +49,97 @@ class Cobol85Listener(ParseTreeListener):
             cnode.token = token.type
             cnode.uppernode = uppernode
             cnode.root = self.root
+            cnode.program_node = self._program_stack[-1]
+            cnode.rununit_node = self.rununit_node
             uppernode.add_subnode(cnode)
 
-    def pop_stack(self, name, ctx):
+    def pop_uppernode_stack(self, name, ctx):
 
-        self._stack.pop()
+        return self._uppernode_stack.pop()
 
     def add_node(self, name, ctx):
 
-        uppernode = self._stack[-1]
+        uppernode = self._uppernode_stack[-1]
 
         node = self.root.__class__()
         node.name = name[5:]
         node.uppernode = uppernode
         node.root = self.root
+        node.program_node = self._program_stack[-1]
+        node.rununit_node = self.rununit_node
         uppernode.add_subnode(node)
 
-        self._stack.append(node)
+        self._uppernode_stack.append(node)
+
+        return node
 
     def __getattr__(self, name):
         if name.startswith('enter'):
             return partial(self.add_node, name)
         elif name.startswith('exit'):
-            return partial(self.pop_stack, name)
+            return partial(self.pop_uppernode_stack, name)
         else:
             import pdb; pdb.set_trace()
 
-#    # Enter a parse tree produced by Cobol85Parser#startRule.
-#    def enterStartRule(self, ctx):
-#        pass
-#
-#    # Exit a parse tree produced by Cobol85Parser#startRule.
-#    def exitStartRule(self, ctx):
-#        pass
-#
-#
-#    # Enter a parse tree produced by Cobol85Parser#compilationUnit.
-#    def enterCompilationUnit(self, ctx):
-#        pass
-#
-#    # Exit a parse tree produced by Cobol85Parser#compilationUnit.
-#    def exitCompilationUnit(self, ctx):
-#        pass
-#
-#
-#    # Enter a parse tree produced by Cobol85Parser#programUnit.
-#    def enterProgramUnit(self, ctx):
-#        pass
-#
-#    # Exit a parse tree produced by Cobol85Parser#programUnit.
-#    def exitProgramUnit(self, ctx):
-#        pass
-#
+    # Enter a parse tree produced by Cobol85Parser#startRule.
+    def enterStartRule(self, ctx):
+
+        node = self.add_node('enterRunUnit', ctx)
+
+        node.namespace = {}
+        node.unresolved = set()
+
+        self.rununit_node = node
+
+    # Exit a parse tree produced by Cobol85Parser#startRule.
+    def exitStartRule(self, ctx):
+        self.pop_uppernode_stack('exitRunUnit', ctx)
+
+    # Enter a parse tree produced by Cobol85Parser#compilationUnit.
+    def enterCompilationUnit(self, ctx):
+
+        node = self.add_node('enterCompilationUnit', ctx)
+
+        for i in range(len(self.stream.tokens)):
+            token = self.stream.tokens[i]
+            if token.channel != token.HIDDEN_CHANNEL:
+                break
+            cnode = self.root.__class__()
+            cnode.name = 'hidden'
+            cnode.text = token.text
+            cnode.token = token.type
+            cnode.uppernode = self._uppernode_stack[-1]
+            cnode.root = self.root
+            cnode.program_node = self._program_stack[-1]
+            node.add_subnode(cnode)
+
+    # Exit a parse tree produced by Cobol85Parser#compilationUnit.
+    def exitCompilationUnit(self, ctx):
+        self.pop_uppernode_stack('exitCompilationUnit', ctx)
+
+
+    # Enter a parse tree produced by Cobol85Parser#programUnit.
+    def enterProgramUnit(self, ctx):
+
+        def add_name(obj, tnode):
+            name = tnode.text
+            if name in obj.namespace:
+                import pdb; pdb.set_trace()
+            else:
+                obj.namespace[tnode.text] = tnode
+
+        node = self.add_node('enterProgramUnit', ctx)
+
+        node.namespace = {}
+        node.add_name = add_name
+
+        self._program_stack.append(node)
+
+    # Exit a parse tree produced by Cobol85Parser#programUnit.
+    def exitProgramUnit(self, ctx):
+        self._program_stack.pop()
+        self.pop_uppernode_stack('exitProgramUnit', ctx)
+
 #
 #    # Enter a parse tree produced by Cobol85Parser#endProgramStatement.
 #    def enterEndProgramStatement(self, ctx):
@@ -2497,7 +2533,7 @@ class Cobol85Listener(ParseTreeListener):
 #    # Exit a parse tree produced by Cobol85Parser#statement.
 #    def exitStatement(self, ctx):
 #        pass
-#        return self.pop_stack('exitStatement', ctx)
+#        return self.pop_uppernode_stack('exitStatement', ctx)
 #
 #
 #    # Enter a parse tree produced by Cobol85Parser#acceptStatement.

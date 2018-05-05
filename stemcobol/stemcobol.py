@@ -15,7 +15,7 @@ from .parser.Cobol85Lexer import Cobol85Lexer
 from .parser.Cobol85Listener import Cobol85Listener
 from .parser.Cobol85Parser import Cobol85Parser
 
-from stemtree import Node, SourceLines
+from stemtree import Node
 
 EOF = Token.EOF
 EPSILON = Token.EPSILON
@@ -43,43 +43,37 @@ cmtentry_patterns = (_re_remarks, _re_security, _re_date_compiled,
 
 FIXED_FORMAT, FREE_FORMAT, VARIABLE_FORMAT = range(3)
 
-#def packline(obj, text):
-#
-#    main_text = obj.seq_area + obj.ind_area + text
-#    # TODO: conform
-#    lines = _conform_format(main_text, obj.sourceformat)
-#    if obj.ext_area:
-#        lines[-1] += ' '*(72-len(lines[-1])) + obj.ext_area
-#    return '\n'.join(lines)
+def tocobol(node, revise=None, merge=None):
 
-def tocobol(obj, revise=None):
-
-    if hasattr(obj, 'text'):
-        if obj.text in ('\n',):
-            lnode = obj.get_leftnode()
-            if isinstance(lnode, obj.__class__) and hasattr(lnode, 'text') and \
-                lnode.text.startswith('*> __stemcobol__'):
-                return ''
+    # all nodes having 'text' is leaf nodes
+    if hasattr(node, 'text'):
+        if node.text in ('\n',):
+            lnode = node.get_leftnode()
+            if isinstance(lnode, node.__class__) and hasattr(lnode, 'text') \
+                and lnode.text.startswith('*> __stemcobol__'):
+                text = ''
             else:
-                return obj.text
-        elif obj.text.startswith('*> __stemcobol__'):
-            direct, text = obj.text[16:].split(':', 1)
+                text = node.text
+        elif node.text.startswith('*> __stemcobol__'):
+            direct, content = node.text[16:].split(':', 1)
             if direct in ('seq', 'ext'):
-                return text
+                text = content
             elif direct.startswith('ind'):
-                return  direct[3]+text
+                text = direct[3]+content
             else:
                 import pdb; pdb.set_trace()
         elif revise:
-            #return obj.packline(revise(obj))
-            return revise(obj)
+            text = revise(node)
         else:
-            #return obj.packline(obj.text)
-            return obj.text
+            text = node.text
+        return text
+    elif merge:
+        return merge(node.subnodes)
+    else:
+        return ''.join([c.tocobol(revise=revise, merge=merge)
+            for c in node.subnodes])
 
-    return ''.join([c.tocobol(revise=revise) for c in obj.subnodes])
-
-def parse(src, fmt, std):
+def parse(path, fmt, std, root=None):
 
     def _split(_src):
         _lines = []
@@ -94,31 +88,38 @@ def parse(src, fmt, std):
     ######### preprocess ##########
     ###############################
 
-    lines = _split(src)
+    with open(path) as f:
+        lines = _split(f.read())
 
-    # handle comments
-    lines = preprocess(lines, fmt, std)
+        # handle comments
+        lines = preprocess(lines, fmt, std)
 
-    #...
+        #...
 
-    # update linemap to start from 1
-    #linemap = dict((k+1, v+1) for k, v in linemap.items())
+        # update linemap to start from 1
+        #linemap = dict((k+1, v+1) for k, v in linemap.items())
 
-    ###############################
-    #########    parse   ##########
-    ###############################
+        ###############################
+        #########    parse   ##########
+        ###############################
 
-    lexer = Cobol85Lexer(InputStream(''.join(lines)))
-    stream = CommonTokenStream(lexer)
-    parser = Cobol85Parser(stream)
-    tree = parser.startRule()
-    shared_methods = {'tocobol': tocobol, 'packline': packline}
-    root = Node(attrs=OrderedDict(), shared_methods=shared_methods)
-    listner = Cobol85Listener(root, stream)
-    walker = ParseTreeWalker()
-    walker.walk(listner, tree)
+        lexer = Cobol85Lexer(InputStream(''.join(lines)))
+        stream = CommonTokenStream(lexer)
+        parser = Cobol85Parser(stream)
+        tree = parser.startRule()
+        shared_methods = {'tocobol': tocobol}
+        _root = Node(attrs=OrderedDict(), shared_methods=shared_methods)
+        _root.name = 'root'
+        _root.root = _root
+        listener = Cobol85Listener(_root, stream)
+        walker = ParseTreeWalker()
+        walker.walk(listener, tree)
 
-    return root
+        if root is None:
+            return _root
+        else:
+            import pdb; pdb.set_trace()
+            return root
 
 def preprocess(_lines, fmt, std):
 
@@ -148,7 +149,7 @@ def preprocess(_lines, fmt, std):
     lines = []
     for lineno, line in enumerate(_lines):
 
-        L = len(line)
+        L = len(line.rstrip())
 
         if seq:
             lines.append('*> __stemcobol__seq:%s\n'%line[seq[0]:seq[1]])

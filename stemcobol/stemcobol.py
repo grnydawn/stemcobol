@@ -107,6 +107,8 @@ def parse(path, fmt, std, root=None):
         stream = CommonTokenStream(lexer)
         parser = Cobol85Parser(stream)
         tree = parser.startRule()
+        if tree.exception is not None:
+            import pdb; pdb.set_trace()
         shared_methods = {'tocobol': tocobol}
         _root = Node(attrs=OrderedDict(), shared_methods=shared_methods)
         _root.name = 'root'
@@ -158,7 +160,7 @@ def preprocess(_lines, fmt, std):
             if line[ind[0]] == '-':
                 import pdb; pdb.set_trace()
             elif line[ind[0]] == '*':
-                if not line[ind[0]:].startswith('*>'):
+                if not line.startswith('*> __stemcobol__'):
                     line = '*> __stemcobol__ind*:%s\n'%line[ind[1]:]
             elif line[ind[0]] in ('$', 'D', 'd', '/'):
                 line = '*> __stemcobol__ind%s:%s\b'%(line[ind[0]], line[ind[1]:])
